@@ -23,7 +23,7 @@ if __name__ == '__main__':
     if not f.exists():
         print("Error: input video file {:s} not found.".format(args.file))
         
-    fdat = f.parent / (f.name+'.txt')
+    fdat = f.parent / (f.name+'.npy')
     if not fdat.exists():
         print("Error: input video file {:s} found, but accompanying data file {:s} not found.".format(str(f), fdat.name))        
    

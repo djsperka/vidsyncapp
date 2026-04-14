@@ -12,6 +12,9 @@ from picamera2 import MappedArray, Picamera2, Preview
 from picamera2.encoders import H264Encoder
 from libcamera import controls
 
+# flask
+from flask import Flask, render_template, Response, request
+
 # numpy
 import numpy as np
 
@@ -30,29 +33,31 @@ formatter = logging.Formatter('%(asctime)s.%(msecs)03d [%(name)s] %(filename)s:%
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
-
-class MyGPIO():
+# piGPIO.py - a simple wrapper around gpiod to read the input and set the LED output. 
+# This is not really necessary, but it makes the code cleaner and more modular. 
+# It also allows us to easily change the GPIO library in the future if we want to.
+# class MyGPIO():
     
-    def __init__(self):
+#     def __init__(self):
 
-        self._chip = Chip(config.CHIP_ID)
-        self._led_offset = self._chip.line_offset_from_id(config.LED_LINE_ID)
-        self._input_offset = self._chip.line_offset_from_id(config.INPUT_LINE_ID)
-        self._line_settings = {
-            self._led_offset: LineSettings(direction=Direction.OUTPUT, output_value=Value.INACTIVE),
-            self._input_offset: LineSettings(direction=Direction.INPUT, bias=Bias.PULL_DOWN)
-        }
-        self._lines = self._chip.request_lines(consumer="MyGPIO", config=self._line_settings)
-        self._encoder = None
+#         self._chip = Chip(config.CHIP_ID)
+#         self._led_offset = self._chip.line_offset_from_id(config.LED_LINE_ID)
+#         self._input_offset = self._chip.line_offset_from_id(config.INPUT_LINE_ID)
+#         self._line_settings = {
+#             self._led_offset: LineSettings(direction=Direction.OUTPUT, output_value=Value.INACTIVE),
+#             self._input_offset: LineSettings(direction=Direction.INPUT, bias=Bias.PULL_DOWN)
+#         }
+#         self._lines = self._chip.request_lines(consumer="MyGPIO", config=self._line_settings)
+#         self._encoder = None
         
-    def __del__(self):
-        self._chip.close()
+#     def __del__(self):
+#         self._chip.close()
 
-    def get_input(self) -> int:
-        return 1 if (self._lines.get_value(self._input_offset) == Value.ACTIVE) else 0
+#     def get_input(self) -> int:
+#         return 1 if (self._lines.get_value(self._input_offset) == Value.ACTIVE) else 0
         
-    def set_led(self, v: int) -> None:
-        self._lines.set_value(self._led_offset, Value.ACTIVE if v>0 else Value.INACTIVE)
+#     def set_led(self, v: int) -> None:
+#         self._lines.set_value(self._led_offset, Value.ACTIVE if v>0 else Value.INACTIVE)
 
 
 class VidSync():
@@ -65,6 +70,8 @@ class VidSync():
         
         if preview:
             self._picam2.start_preview(Preview.QTGL)
+        else:
+            self._picam2.start_preview(Preview.NULL)
 
         # camera config. Will probably modify the default created with
         # args to the constructor
@@ -123,13 +130,11 @@ if __name__ == '__main__':
 
     from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
     parser = ArgumentParser(description='record video with sync signals', formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--test', action='store_true', help='record for 10 seconds')
     parser.add_argument('--verbose', action='store_true', help='increase verbosity (log at DEBUG level)')
     parser.add_argument('--file', default='', help='output filename')
-    parser.add_argument('--seconds', type=int, default=10, help='seconds to record for')
     parser.add_argument('--stamp', action='store_true', help='Apply timestamp and frame counter to recorded video')
     parser.add_argument('--preview', action='store_true', help='Open preview window on Pi screen')
-    
+    parser.add_argument('--cmdline', action='store_true', help='Control recording from command line (no web app)')
     args = parser.parse_args()
 
     if args.verbose:
@@ -139,6 +144,8 @@ if __name__ == '__main__':
     try:
         gpio = MyGPIO()
         cam = VidSync(gpio, stamp=args.stamp, preview=args.preview)
+
+        
         started = False
         while True:
             
