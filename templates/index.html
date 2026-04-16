@@ -30,5 +30,16 @@
         <input type="submit" value="Stop Recording">
       </form>
       {% endif %}
+      <hr>
+        <h2>Download files:</h2>
+        <table>
+            {% for file in files %}
+            {% set ftxt = file + ".npy" %}
+                <tr>
+                    <td>{{file}}</td><td><a href="{{url_for('download', filename=file)}}">video</a></td><td><a href="{{url_for('download', filename=ftxt)}}">npy</a></td>
+                </tr>
+            {% endfor %}
+        </table>
+
   </body>
 </html>

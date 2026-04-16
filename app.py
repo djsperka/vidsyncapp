@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import os
 import time
-from flask import Flask, render_template, Response, request
+import glob
+from flask import Flask, render_template, Response, request, jsonify, send_from_directory
 import flask_cors
 
 # local hardware-specific definitions here
@@ -9,7 +10,7 @@ import config_vidsync as config
 
 # camera
 from picamera2 import MappedArray, Picamera2, Preview
-from picamera2.encoders import H264Encoder
+from picamera2.encoders import H264Encoder, MJPEGEncoder
 from libcamera import controls
 
 # opencv
@@ -60,13 +61,20 @@ camera.configure(camera.create_preview_configuration(main={"format": 'XRGB8888',
 camera.start()
 camera_status = CameraStatus()
 
+encoder = MJPEGEncoder()
+
 
 app = Flask(__name__)
 flask_cors.CORS(app)
 
+
+def render_index():
+    filenames=[os.path.basename(f) for f in glob.glob(os.path.join(config.DATA_FOLDER, '*.mjpeg'))]
+    return render_template('index.html', is_recording=camera_status.is_recording, files=filenames)
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    return render_template('index.html', is_recording=camera_status.is_recording)
+    return render_index()
 
 def cb_frame(request):
     
@@ -85,8 +93,10 @@ def stop_recording():
     camera_status.is_recording = False
     camera.pre_callback = None
     camera.stop_recording()
-    np.save(camera_status.data_filename, camera_status.data[:camera_status.recording_frame_count])
-    return render_template('index.html', is_recording=camera_status.is_recording)
+    full_data_path = os.path.join(config.DATA_FOLDER, camera_status.data_filename)
+    print("Saving {:d} frames of data to {:s}".format(camera_status.recording_frame_count, full_data_path))
+    np.save(full_data_path, camera_status.data[:camera_status.recording_frame_count])
+    return render_index()
 
 @app.route('/start', methods=['GET'])
 def start_recording():
@@ -96,12 +106,12 @@ def start_recording():
 
     # generate filename based on timestamp
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    filename = f"{basename}_{timestamp}.h264"
+    filename = f"{basename}_{timestamp}.mjpeg"
+    full_path = os.path.join(config.DATA_FOLDER, filename)
 
-    # create encoder and start recording
-    encoder = H264Encoder()
+    # create encoder and start recording. Pre-pend data folder to filename
     camera.pre_callback = cb_frame
-    camera.start_recording(encoder, filename)
+    camera.start_recording(encoder, os.path.join(config.DATA_FOLDER, filename))
 
     camera_status.is_recording = True
     camera_status.recording_start_time = time.time()
@@ -110,7 +120,7 @@ def start_recording():
     camera_status.data_filename = filename + ".npy"
     camera_status.data = np.full((21600), -1, dtype=np.int8)
 
-    return render_template('index.html', is_recording=camera_status.is_recording)
+    return render_index()   
 
 def gen(camera):
     """Video streaming generator function."""
@@ -137,29 +147,28 @@ def get_camera_status():
 def status():
     return Response(get_camera_status(), mimetype='text/event-stream')
 
+# @app.route("/files")
+# def list_files():
+#     """Endpoint to list files on the server."""
+#     files = []
+#     for filename in os.listdir(config.DATA_FOLDER):
+#         path = os.path.join(config.DATA_FOLDER, filename)
+#         if os.path.isfile(path):
+#             files.append(filename)
+#     return jsonify(files)
+
+@app.route('/files')
+def list_files():
+     filenames=os.listdir(config.DATA_FOLDER)
+     return render_template('list.html', files=filenames )
+
+@app.route('/files/<path:filename>')
+def download(filename):
+    return send_from_directory(os.path.abspath(config.DATA_FOLDER), filename, as_attachment=False)
+#here for attachment i went with flase otherwise it gonna download all the contents of the files
+
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', threaded=True)
 
-
-
-
-
-
-# // Handler for SSE (Server-Sent Events)
-# func streamResponse(w http.ResponseWriter, r *http.Request) {
-#  // Set headers for SSE (Server-Sent Events)
-#  w.Header().Set("Content-Type", "text/event-stream")
-#  w.Header().Set("Cache-Control", "no-cache")
-#  w.Header().Set("Connection", "keep-alive")
- 
-# // Simulate sending data in real-time
-#  for i := 1; i <= 5; i++ {
-#   fmt.Fprintf(w, "data: Message %d at %s\n\n", i, time.Now().Format(time.RFC3339))
-#   w.(http.Flusher).Flush() // Immediately send the data to the client
-#   time.Sleep(1 * time.Second) // Simulate delay
-#  }
- 
-# // End of stream
-#  fmt.Fprintf(w, "data: Stream Finished\n\n")
-#  w.(http.Flusher).Flush()
-# }
