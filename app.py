@@ -11,6 +11,7 @@ import config_vidsync as config
 # camera
 from picamera2 import MappedArray, Picamera2, Preview
 from picamera2.encoders import H264Encoder, MJPEGEncoder
+from picamera2.outputs import FileOutput
 from libcamera import controls
 
 # opencv
@@ -61,9 +62,6 @@ camera.configure(camera.create_preview_configuration(main={"format": 'XRGB8888',
 camera.start()
 camera_status = CameraStatus()
 
-encoder = MJPEGEncoder()
-
-
 app = Flask(__name__)
 flask_cors.CORS(app)
 
@@ -92,7 +90,7 @@ def stop_recording():
     print("Stop recording requested")
     camera_status.is_recording = False
     camera.pre_callback = None
-    camera.stop_recording()
+    camera.stop_encoder()
     full_data_path = os.path.join(config.DATA_FOLDER, camera_status.data_filename)
     print("Saving {:d} frames of data to {:s}".format(camera_status.recording_frame_count, full_data_path))
     np.save(full_data_path, camera_status.data[:camera_status.recording_frame_count])
@@ -111,7 +109,11 @@ def start_recording():
 
     # create encoder and start recording. Pre-pend data folder to filename
     camera.pre_callback = cb_frame
-    camera.start_recording(encoder, os.path.join(config.DATA_FOLDER, filename))
+
+    encoder = MJPEGEncoder(1000000)
+    fileoutput = FileOutput(os.path.join(config.DATA_FOLDER, filename))
+    encoder.output = fileoutput
+    camera.start_encoder(encoder)
 
     camera_status.is_recording = True
     camera_status.recording_start_time = time.time()
