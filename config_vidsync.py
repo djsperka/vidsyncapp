@@ -8,7 +8,7 @@ from cv2 import FONT_HERSHEY_SIMPLEX
 CHIP_ID = "/dev/gpiochip0"
 
 # line for LED
-LED_LINE_ID = "GPIO4"
+LED_LINE_ID = "GPIO16"
 
 # input signal line
 INPUT_LINE_ID = "GPIO27"
