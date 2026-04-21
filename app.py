@@ -9,10 +9,10 @@ import flask_cors
 import config_vidsync as config
 
 # camera
-from picamera2 import MappedArray, Picamera2, Preview
+from picamera2 import MappedArray, Picamera2
 from picamera2.encoders import H264Encoder, MJPEGEncoder
 from picamera2.outputs import FileOutput
-from libcamera import controls
+from libcamera import Transform
 
 # opencv
 import cv2
@@ -58,16 +58,27 @@ class CameraStatus:
 gpio = RPiVidSyncGPIO(chip_id=config.CHIP_ID, led_line_id=config.LED_LINE_ID, input_line_id=config.INPUT_LINE_ID)
 
 camera = Picamera2()
-camera.configure(camera.create_preview_configuration(main={"format": 'XRGB8888', "size": (640, 480)}))
+camera.video_configuration.main.size = config.CAMERA_MAIN_SIZE
+camera.video_configuration.main.format = config.CAMERA_MAIN_FORMAT
+camera.video_configuration.enable_lores()
+camera.video_configuration.lores.size = config.CAMERA_LORES_SIZE
+camera.video_configuration.lores.format = config.CAMERA_LORES_FORMAT
+camera.controls.FrameRate = config.CAMERA_FRAMERATE
+camera.video_configuration.transform = Transform(vflip=1)  # 
+camera.configure("video")
+
 camera.start()
 camera_status = CameraStatus()
+
+
 
 app = Flask(__name__)
 flask_cors.CORS(app)
 
 
 def render_index():
-    filenames=[os.path.basename(f) for f in glob.glob(os.path.join(config.DATA_FOLDER, '*.mjpeg'))]
+    #filenames=[os.path.basename(f) for f in glob.glob(os.path.join(config.DATA_FOLDER, '*.mjpeg'))]
+    filenames=[(os.path.basename(f),os.stat(f).st_size) for f in glob.glob(os.path.join(config.DATA_FOLDER, '*.mjpeg'))]
     return render_template('index.html', is_recording=camera_status.is_recording, files=filenames)
 
 @app.route('/', methods=['GET', 'POST'])
@@ -81,7 +92,7 @@ def cb_frame(request):
 
     # txt on preview
     txt = "{:05d} : {:s}".format(camera_status.recording_frame_count, time.strftime("%Y-%m-%d %X"))
-    with MappedArray(request, "main") as m:
+    with MappedArray(request, "lores") as m:
         cv2.putText(m.array, txt, config.OV_TEXT_ORIGIN, config.OV_TEXT_FONT, config.OV_TEXT_SCALE, config.OV_TEXT_COLOR, config.OV_TEXT_THICKNESS)
     camera_status.recording_frame_count += 1
 
@@ -113,7 +124,7 @@ def start_recording():
     encoder = MJPEGEncoder(1000000)
     fileoutput = FileOutput(os.path.join(config.DATA_FOLDER, filename))
     encoder.output = fileoutput
-    camera.start_encoder(encoder)
+    camera.start_encoder(encoder, name="main")
 
     camera_status.is_recording = True
     camera_status.recording_start_time = time.time()
