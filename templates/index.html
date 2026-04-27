@@ -33,10 +33,12 @@
       <hr>
         <h2>Download files:</h2>
         <table>
-            {% for file in files %}
+            {% for (file,sz) in files %}
             {% set ftxt = file + ".npy" %}
+            {% set mb = (sz / 1024 / 1024) | round(2) %}
                 <tr>
                     <td>{{file}}</td><td><a href="{{url_for('download', filename=file)}}">video</a></td><td><a href="{{url_for('download', filename=ftxt)}}">npy</a></td>
+                    <td>({{mb}} MB)</td>
                 </tr>
             {% endfor %}
         </table>
