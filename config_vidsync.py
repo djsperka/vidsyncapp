@@ -5,13 +5,13 @@ Configuration vars for rpi cam sync project
 from cv2 import FONT_HERSHEY_SIMPLEX
 
 # device name for the chip
-CHIP_ID = "/dev/gpiochip0"
+CHIP_ID = "/dev/gpiochip15"
 
 # line for LED
 LED_LINE_ID = "GPIO16"
 
 # input signal line
-INPUT_LINE_ID = "GPIO27"
+INPUT_LINE_ID = "GPIO23"
 
 # folder for video/data files
 DATA_FOLDER = "/home/cclab/work/data"
